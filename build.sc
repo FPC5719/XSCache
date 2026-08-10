@@ -8,11 +8,11 @@ import $file.`rocket-chip`.common
 import $file.`rocket-chip`.cde.common
 import $file.`rocket-chip`.hardfloat.common
 
-val defaultScalaVersion = "2.13.17"
+val defaultScalaVersion = "2.13.18"
 
 def defaultVersions = Map(
-  "chisel"        -> mvn"org.chipsalliance::chisel:7.13.0",
-  "chisel-plugin" -> mvn"org.chipsalliance:::chisel-plugin:7.13.0"
+  "chisel"        -> mvn"org.chipsalliance::chisel:unknown",
+  "chisel-plugin" -> mvn"org.chipsalliance:::chisel-plugin:unknown"
 )
 
 val pwd = os.Path(sys.env("MILL_WORKSPACE_ROOT"))
