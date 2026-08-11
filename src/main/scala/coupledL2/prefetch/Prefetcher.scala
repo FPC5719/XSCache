@@ -19,6 +19,7 @@ package xscache.coupledL2.prefetch
 
 import chisel3._
 import chisel3.util._
+import chisel3.experimental.cacheable._
 import utility._
 import org.chipsalliance.cde.config.Parameters
 import utility.mbist.MbistPipeline
@@ -311,7 +312,7 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
     })))
   ) else None
 
-  val tp = if (hasTPPrefetcher) Some(Module(new TemporalPrefetch())) else None
+  val tp = if (hasTPPrefetcher) Some(CacheableModule(new TemporalPrefetch())) else None
   // define Next-Line Prefetcher
   val nl = if (hasNLPrefetcher) Some(Module(new NextLinePrefetch())) else None
 

@@ -128,6 +128,21 @@ class TestTop_CHIL2(numCores: Int = 1, numULAgents: Int = 0, banks: Int = 1, ext
     mmioClientNode
   }
 
+  val tpmetaBridges = l2_nodes.map { l2 =>
+    (l2.tpmeta_source_node, l2.tpmeta_sink_node) match {
+      case (Some(reqNode), Some(respNode)) =>
+        val reqSink = BundleBridgeSink[DecoupledIO[TPmetaReq]]()
+        val respSource = BundleBridgeSource[ValidIO[TPmetaResp]]()
+        reqSink := reqNode
+        respNode := respSource
+        Some((reqSink, respSource))
+      case (None, None) =>
+        None
+      case _ =>
+        throw new IllegalArgumentException("TemporalPrefetch metadata request/response nodes must be enabled together")
+    }
+  }
+
   lazy val module = new LazyModuleImp(this){
 
     val time_sim = if (extTime) {
@@ -172,6 +187,19 @@ class TestTop_CHIL2(numCores: Int = 1, numULAgents: Int = 0, banks: Int = 1, ext
       IO(Output(chiselTypeOf(l2_node.module.io.l2_hint)))
     }
 
+    tpmetaBridges.flatten.foreach { case (reqSink, respSource) =>
+      val req = reqSink.in.head._1
+      val resp = respSource.out.head._1
+      val readFire = req.fire && !req.bits.wmode
+      val readResp = RegNext(readFire, false.B)
+      val readHartId = RegEnable(req.bits.hartid, 0.U.asTypeOf(req.bits.hartid), req.fire)
+
+      req.ready := true.B
+      resp.valid := readResp
+      resp.bits := 0.U.asTypeOf(resp.bits)
+      resp.bits.hartid := readHartId
+    }
+
     l2_nodes.zipWithIndex.foreach { case (l2, i) =>
 
       if (!cacheParams.FPGAPlatform && cacheParams.enableCHILog) {
@@ -198,7 +226,15 @@ class TestTop_CHIL2(numCores: Int = 1, numULAgents: Int = 0, banks: Int = 1, ext
       dontTouch(l2.module.io)
 
       l2.module.io.hartId := i.U
-      l2.module.io.pfCtrlFromCore := DontCare
+      val pfCtrl = WireInit(0.U.asTypeOf(new PrefetchCtrlFromCore))
+      pfCtrl.l2_pf_master_en := cacheParams.prefetch.nonEmpty.B
+      pfCtrl.l2_pf_recv_en := cacheParams.prefetch.exists(_.isInstanceOf[PrefetchReceiverParams]).B
+      pfCtrl.l2_pbop_en := cacheParams.prefetch.exists(_.isInstanceOf[BOPParameters]).B
+      pfCtrl.l2_vbop_en := cacheParams.prefetch.exists(_.isInstanceOf[BOPParameters]).B
+      pfCtrl.l2_tp_en := cacheParams.prefetch.exists(_.isInstanceOf[TPParameters]).B
+      pfCtrl.l2_cdp_en := cacheParams.prefetch.exists(_.isInstanceOf[CDPParameters]).B
+      pfCtrl.l2_pf_delay_latency := 0.U
+      l2.module.io.pfCtrlFromCore := pfCtrl
       l2.module.io.nodeID := io(i).nodeId
       l2.module.io.debugTopDown := DontCare
       l2.module.io.l2_tlb_req <> DontCare
@@ -230,7 +266,7 @@ object TestTopCHIHelper {
         FPGAPlatform        = onFPGAPlatform,
 
         // prefetch
-        prefetch            = Seq(BOPParameters()),
+        prefetch            = Seq(BOPParameters(), TPParameters()),
 
         // data check
         dataCheck           = Some("oddparity"),
