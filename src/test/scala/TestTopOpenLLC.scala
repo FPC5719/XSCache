@@ -1,6 +1,7 @@
 package xscache.openLLC
 
 import chisel3._
+import chisel3.properties.Property
 import circt.stage.{ChiselStage, FirtoolOption}
 import chisel3.util._
 import chisel3.stage.ChiselGeneratorAnnotation
@@ -112,11 +113,13 @@ class TestTopOpenLLC(numCores: Int = 1, numULAgents: Int = 0, banks: Int = 1, is
     }
   }
 
+  val hartIdDomain = new HartIdDomain(numCores)
+
   val l2_nodes = (0 until numCores).map(i => LazyModule(new CoupledL2()(new Config((site, here, up) => {
     case L2ParamKey => l2Params.copy(
       name                = s"L2_$i",
-      hartId              = i,
     )
+    case XSHartIdDomainKey => hartIdDomain
     case CHIIssue => issue
     case BankBitsKey => log2Ceil(banks)
     case MaxHartIdBits => log2Up(numCores)
@@ -284,6 +287,7 @@ class TestTopOpenLLC(numCores: Int = 1, numULAgents: Int = 0, banks: Int = 1, is
       l2.module.io.l2_hint <> io_l1(i)
 
       l2.module.io.hartId := i.U
+      l2.module.hartIdSelect := Property(hartIdDomain.harts(i))
       l2.module.io.pfCtrlFromCore := DontCare
       l2.module.io.nodeID := i.U(NODEID_WIDTH.W)
       l2.module.io.debugTopDown := DontCare
@@ -378,15 +382,31 @@ object TestTopOpenLLCHelper {
         elaboratedTopDown   = enablePerf,
         FPGAPlatform        = FPGAPlatform
       )
+      // The OpenLLC perf path reads these; without them the dual-core top fails on the first
+      // XSPerfPrint ("Key LogUtilsOptionsKey is not defined in Parameters").
+      case LogUtilsOptionsKey => LogUtilsOptions(
+        false,
+        enablePerf,
+        FPGAPlatform
+      )
+      case PerfCounterOptionsKey => PerfCounterOptions(
+        enablePerf && !FPGAPlatform,
+        false,
+        XSPerfLevel.withName("VERBOSE"),
+        0
+      )
     })
 
     CLogB.init(enableCHILog)
     ChiselDB.init(enableChiselDB)
 
-    val top = DisableMonitors(p => LazyModule(fTop(p)))(config)
-
-    (new ChiselStage).execute(args, Seq(
-      ChiselGeneratorAnnotation(() => top.module),
+    // The design - and with it the `HartIdDomain` ChoiceDomain, which registers in the Chisel
+    // Builder - must be built inside the generator lambda, not before elaboration.
+    (new xscache.XSCacheChiselStage).execute(args, Seq(
+      ChiselGeneratorAnnotation(() => {
+        val top = DisableMonitors(p => LazyModule(fTop(p)))(config)
+        top.module
+      }),
       FirtoolOption("--disable-annotation-unknown"),
       FirtoolOption("--default-layer-specialization=enable")
     ))

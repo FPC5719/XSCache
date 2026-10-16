@@ -19,6 +19,7 @@ package xscache.coupledL2
 
 import chisel3._
 import chisel3.util._
+import chisel3.properties.Property
 import utility.mbist.MbistPipeline
 import org.chipsalliance.cde.config.Parameters
 import xscache.coupledL2._
@@ -37,6 +38,9 @@ class Slice()(implicit p: Parameters) extends BaseSlice[OuterBundle]
   })
   val io_pCrd = IO(Vec(mshrsAll, new PCrdQueryBundle))
 
+  // Standalone choice selector; see CoupledL2Imp for why it is not a bundle field.
+  val hartIdSelect = IO(Input(Property[hartIdDomain.Case]()))
+
   val io_cdp_triggers = Option.when(hasCDP) (IO(ValidIO(new CDPDetectTask(dataBits=blockBits))))
 
   /* Upwards TileLink-related modules */
@@ -54,6 +58,7 @@ class Slice()(implicit p: Parameters) extends BaseSlice[OuterBundle]
 
   /* Data path and control path */
   val directory = Module(new Directory())
+  directory.hartIdSelect := hartIdSelect
   val dataStorage = Module(new DataStorage())
   val refillBuf = Module(new MSHRBuffer(wPorts = 2))
   val releaseBuf = Module(new MSHRBuffer(wPorts = 3))

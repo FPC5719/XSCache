@@ -8,11 +8,13 @@ import $file.`rocket-chip`.common
 import $file.`rocket-chip`.cde.common
 import $file.`rocket-chip`.hardfloat.common
 
-val defaultScalaVersion = "2.13.17"
+val defaultScalaVersion = "2.13.18"
 
+// The `cacheable-framework` branch builds against the local XiangShan chisel fork, which is
+// published to ~/.ivy2/local as 7.14.0-xs-1012 (same version XiangShan/build.mill pins).
 def defaultVersions = Map(
-  "chisel"        -> mvn"org.chipsalliance::chisel:7.13.0",
-  "chisel-plugin" -> mvn"org.chipsalliance:::chisel-plugin:7.13.0"
+  "chisel"        -> mvn"org.chipsalliance::chisel:7.14.0-xs-1012",
+  "chisel-plugin" -> mvn"org.chipsalliance:::chisel-plugin:7.14.0-xs-1012"
 )
 
 val pwd = os.Path(sys.env("MILL_WORKSPACE_ROOT"))
@@ -112,7 +114,10 @@ object XSCache extends HasChisel with $file.common.XSCacheModule {
       override def millSourcePath = pwd
       override def moduleDeps = super.moduleDeps ++ Seq(XSCache)
       override def sources = T.sources {
-        Seq(PathRef(pwd / "src" / "test" / "scala" / "TestTopL2.scala"))
+        Seq(
+          PathRef(pwd / "src" / "test" / "scala" / "XSCacheChiselStage.scala"),
+          PathRef(pwd / "src" / "test" / "scala" / "TestTopL2.scala")
+        )
       }
       override def scalacOptions = super.scalacOptions() ++ Agg("-deprecation", "-feature")
     }
@@ -121,7 +126,10 @@ object XSCache extends HasChisel with $file.common.XSCacheModule {
       override def millSourcePath = pwd
       override def moduleDeps = super.moduleDeps ++ Seq(XSCache)
       override def sources = T.sources {
-        Seq(PathRef(pwd / "src" / "test" / "scala" / "TestTopOpenLLC.scala"))
+        Seq(
+          PathRef(pwd / "src" / "test" / "scala" / "XSCacheChiselStage.scala"),
+          PathRef(pwd / "src" / "test" / "scala" / "TestTopOpenLLC.scala")
+        )
       }
       override def scalacOptions = super.scalacOptions() ++ Agg("-deprecation", "-feature")
     }
@@ -132,6 +140,7 @@ object XSCache extends HasChisel with $file.common.XSCacheModule {
       override def sources = T.sources {
         Seq(
           PathRef(pwd / "src" / "test" / "scala" / "ZhuJiangBridge.scala"),
+          PathRef(pwd / "src" / "test" / "scala" / "XSCacheChiselStage.scala"),
           PathRef(pwd / "src" / "test" / "scala" / "TestTopZhuJiang.scala")
         )
       }

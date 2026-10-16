@@ -19,6 +19,7 @@ package xscache.coupledL2
 
 import chisel3._
 import chisel3.util._
+import chisel3.properties.Property
 import utility.mbist.MbistPipeline
 import xscache.coupledL2.utils._
 import utility.{ChiselDB, Code, MemReqSource, ParallelPriorityMux, RegNextN, XSPerfAccumulate, MaskToOH}
@@ -131,6 +132,8 @@ class PrefetchDbEntry(implicit p: Parameters) extends L2Bundle {
 
 
 class Directory(implicit p: Parameters) extends L2Module {
+
+  implicit val hartIdSelect = IO(Input(Property[hartIdDomain.Case]()))
 
   val io = IO(new Bundle() {
     val read = Flipped(DecoupledIO(new DirRead))
@@ -459,10 +462,9 @@ class Directory(implicit p: Parameters) extends L2Module {
   /* ====== ChiselDB logging for  prefetcher lifecycle ====== */
   if (cacheParams.enableMonitor && !cacheParams.FPGAPlatform) {
     val defaultPfSrc = PfSource.NoWhere.id.U
-    val hartId = cacheParams.hartId
-    val pfReqWriteTable = ChiselDB.createTable(s"L2_Slice${p(SliceIdKey)}_Write_Prefetch_hart$hartId", new PrefetchDbEntry, basicDB = false)
-    val pfReqReadTable = ChiselDB.createTable(s"L2_Slice${p(SliceIdKey)}_Read_Prefetch_hart$hartId", new PrefetchDbEntry, basicDB = false)
-    val pfReqEvictTable = ChiselDB.createTable(s"L2_Slice${p(SliceIdKey)}_Evict_Prefetch_hart$hartId", new PrefetchDbEntry, basicDB = false)
+    val pfReqWriteTable = ChiselDB.PerHart().createTable(s"L2_Slice${p(SliceIdKey)}_Write_Prefetch", new PrefetchDbEntry, basicDB = false)
+    val pfReqReadTable = ChiselDB.PerHart().createTable(s"L2_Slice${p(SliceIdKey)}_Read_Prefetch", new PrefetchDbEntry, basicDB = false)
+    val pfReqEvictTable = ChiselDB.PerHart().createTable(s"L2_Slice${p(SliceIdKey)}_Evict_Prefetch", new PrefetchDbEntry, basicDB = false)
     
     // Write: meta write that marks a block as prefetched
     val wmeta = io.metaWReq.bits.wmeta
@@ -478,7 +480,7 @@ class Directory(implicit p: Parameters) extends L2Module {
     pfReqWrite.isPrefetch := wmeta.prefetch.getOrElse(false.B) // write data is for a prefetched block or not
     pfReqWrite.metaSource := wmeta.prefetchSrc.getOrElse(defaultPfSrc) // source of the block that writed
     pfReqWrite.reqSource := wmeta.prefetchSrc.getOrElse(defaultPfSrc) // The source of the request that causes this meta write
-    pfReqWriteTable.log(pfReqWrite, pfReqWriteEn, s"L2${hartId}_${p(SliceIdKey)}", clock, reset)
+    pfReqWriteTable.log(pfReqWrite, pfReqWriteEn, s"L2Slice${p(SliceIdKey)}", clock, reset)
 
     // Read: when a read hits a prefetched block
     val pfReqReadEn = io.resp.valid && io.resp.bits.hit && io.resp.bits.meta.prefetch.getOrElse(false.B) 
@@ -490,7 +492,7 @@ class Directory(implicit p: Parameters) extends L2Module {
     pfReqRead.way := io.resp.bits.way // read req accsess a prefetched block in which way
     pfReqRead.metaSource := io.resp.bits.meta.prefetchSrc.getOrElse(defaultPfSrc) // source of the block that read req accessed
     pfReqRead.reqSource := io.resp.bits.replacerInfo.reqSource // The source of the read request (eg:bop,tp,prefetcher, etc.)
-    pfReqReadTable.log(pfReqRead, pfReqReadEn, s"L2${hartId}_${p(SliceIdKey)}", clock, reset)
+    pfReqReadTable.log(pfReqRead, pfReqReadEn, s"L2Slice${p(SliceIdKey)}", clock, reset)
 
     // Eviction: when Directory issues a replacement for a prefetched block
     val evictBlockEn = io.replResp.valid && !io.replResp.bits.retry
@@ -508,6 +510,6 @@ class Directory(implicit p: Parameters) extends L2Module {
     pfReqEvict.isPrefetch := io.replResp.bits.meta.prefetch.getOrElse(false.B)
     pfReqEvict.way := io.replResp.bits.way // way of evict block
     pfReqEvict.metaSource := io.replResp.bits.meta.prefetchSrc.getOrElse(defaultPfSrc) // source of the block that evicted
-    pfReqEvictTable.log(pfReqEvict, pfReqEvictEn, s"L2${hartId}_${p(SliceIdKey)}", clock, reset)
+    pfReqEvictTable.log(pfReqEvict, pfReqEvictEn, s"L2Slice${p(SliceIdKey)}", clock, reset)
   }
 }

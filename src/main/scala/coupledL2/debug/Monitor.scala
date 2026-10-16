@@ -2,6 +2,7 @@ package xscache.coupledL2.debug
 
 import chisel3._
 import chisel3.util._
+import chisel3.properties.Property
 import org.chipsalliance.cde.config.Parameters
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.tilelink.TLMessages._
@@ -39,6 +40,8 @@ class CPL2S3Info(implicit p: Parameters) extends L2Bundle {
 }
 
 class Monitor(implicit p: Parameters) extends L2Module {
+  implicit val hartIdSelect = IO(Input(Property[hartIdDomain.Case]()))
+
   val io = IO(new Bundle() {
     val fromMainPipe = Input(new MainpipeMoni())
 //  val nestedWBValid = Input(Bool())
@@ -86,8 +89,7 @@ class Monitor(implicit p: Parameters) extends L2Module {
 
   /* ======== ChiselDB ======== */
   if (cacheParams.enableMonitor && !cacheParams.FPGAPlatform) {
-    val hartId = cacheParams.hartId
-    val table = ChiselDB.createTable(s"L2MP", new CPL2S3Info, basicDB = true)
+    val table = ChiselDB.PerHart().createTable(s"L2MP", new CPL2S3Info, basicDB = true)
     val s3Info = Wire(new CPL2S3Info)
     s3Info.mshrTask := req_s3.mshrTask
     s3Info.channel := req_s3.channel
@@ -102,6 +104,6 @@ class Monitor(implicit p: Parameters) extends L2Module {
     s3Info.metaWvalid := mp.metaW_s3.valid
     s3Info.metaWway := OHToUInt(mp.metaW_s3.bits.wayOH)
 
-    table.log(s3Info, s3_valid, s"L2${hartId}_${p(SliceIdKey)}", clock, reset)
+    table.log(s3Info, s3_valid, s"L2Slice${p(SliceIdKey)}", clock, reset)
   }
 }

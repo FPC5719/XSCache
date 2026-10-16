@@ -1,6 +1,7 @@
 package xscache.coupledL2
 
 import chisel3._
+import chisel3.properties.Property
 import circt.stage.ChiselStage
 import circt.stage.FirtoolOption
 import chisel3.util._
@@ -72,11 +73,13 @@ class TestTop_CHIL2(numCores: Int = 1, numULAgents: Int = 0, banks: Int = 1, ext
     }
   }
 
+  val hartIdDomain = new HartIdDomain(numCores)
+
   val l2_nodes = (0 until numCores).map(i => LazyModule(new CoupledL2()(new Config((site, here, up) => {
     case L2ParamKey => cacheParams.copy(
       name                = s"L2_$i",
-      hartId              = i,
     )
+    case XSHartIdDomainKey => hartIdDomain
     case CHIIssue => p(CHIIssue)
     case BankBitsKey => log2Ceil(banks)
     case MaxHartIdBits => log2Up(numCores)
@@ -198,6 +201,7 @@ class TestTop_CHIL2(numCores: Int = 1, numULAgents: Int = 0, banks: Int = 1, ext
       dontTouch(l2.module.io)
 
       l2.module.io.hartId := i.U
+      l2.module.hartIdSelect := Property(hartIdDomain.harts(i))
       l2.module.io.pfCtrlFromCore := DontCare
       l2.module.io.nodeID := io(i).nodeId
       l2.module.io.debugTopDown := DontCare
@@ -213,7 +217,8 @@ object TestTopCHIHelper {
           onFPGAPlatform: Boolean,
           enableChiselDB: Boolean,
           enableTLLog: Boolean,
-          enableCHILog: Boolean)(args: Array[String]) = {
+          enableCHILog: Boolean,
+          enableConstantin: Boolean)(args: Array[String]) = {
 
     val config = new Config((_, _, _) => {
       case L2ParamKey => L2Param(
@@ -250,12 +255,15 @@ object TestTopCHIHelper {
 
     CLogB.init(true)
     ChiselDB.init(enableChiselDB)
-    Constantin.init(false)
+    Constantin.init(enableConstantin)
 
-    val top = DisableMonitors(p => LazyModule(fTop(p)))(config)
-
-    (new ChiselStage).execute(args, Seq(
-      ChiselGeneratorAnnotation(() => top.module),
+    // The design - and with it the `HartIdDomain` ChoiceDomain, which registers in the Chisel
+    // Builder - must be built inside the generator lambda, not before elaboration.
+    (new xscache.XSCacheChiselStage).execute(args, Seq(
+      ChiselGeneratorAnnotation(() => {
+        val top = DisableMonitors(p => LazyModule(fTop(p)))(config)
+        top.module
+      }),
       FirtoolOption("--disable-annotation-unknown"),
       FirtoolOption("--default-layer-specialization=enable")
     ))
@@ -277,6 +285,7 @@ Usage: TestTop_CHIL2 [<--option> <values>]
       --bank <bank_count>       specify bank (slice) count, 4 by default
       --fpga <1>                generate for FPGA platform
       --chiseldb <1>            enable ChisleDB
+      --constantin <1>          enable Constantin records
       --tllog <1>               enable TLLogger under ChiselDB
       --chilog <1>              enable CHILogger under ChiselDB
       --etime <1>               enable external world time for CHI logging
@@ -298,6 +307,7 @@ Usage: TestTop_CHIL2 [<--option> <values>]
   var issue: String = "B"
   var onFPGAPlatform: Boolean = false
   var enableChiselDB: Boolean = false
+  var enableConstantin: Boolean = false
   var enableTLLog: Boolean = false
   var enableCHILog: Boolean = false
   var eTime: Boolean = false
@@ -310,6 +320,7 @@ Usage: TestTop_CHIL2 [<--option> <values>]
     case (Array("--bank", value), i) => (numBanks = value.toInt, i)
     case (Array("--fpga", value), i) => (onFPGAPlatform = value.toInt != 0, i)
     case (Array("--chiseldb", value), i) => (enableChiselDB = value.toInt != 0, i)
+    case (Array("--constantin", value), i) => (enableConstantin = value.toInt != 0, i)
     case (Array("--tllog", value), i) => (enableTLLog = value.toInt != 0, i)
     case (Array("--chilog", value), i) => (enableCHILog = value.toInt != 0, i)
     case (Array("--etime", value), i) => (eTime = value.toInt != 0, i)
@@ -333,6 +344,7 @@ Usage: TestTop_CHIL2 [<--option> <values>]
     onFPGAPlatform,
     enableChiselDB,
     enableTLLog,
-    enableCHILog
+    enableCHILog,
+    enableConstantin
   )(varArgs.toArray)
 }

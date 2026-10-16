@@ -101,7 +101,6 @@ case class L2Param(
     e = BufferParams.default
   ),
 
-  hartId: Int = 0,
   // Prefetch
   prefetch: Seq[PrefetchParameters] = Nil,
   // L2 Flush

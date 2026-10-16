@@ -21,6 +21,7 @@ package xscache.coupledL2
 
 import chisel3._
 import chisel3.util._
+import chisel3.properties.Property
 import utility._
 import freechips.rocketchip.diplomacy._
 import freechips.rocketchip.tile.MaxHartIdBits
@@ -44,6 +45,8 @@ trait HasCoupledL2Parameters {
   val p: Parameters
   def enableClockGate = p(EnableL2ClockGate)
   def cacheParams = p(L2ParamKey)
+  /** The single `HartIdDomain` of this elaboration, provisioned once by the top level. */
+  implicit lazy val hartIdDomain: HartIdDomain = p(XSHartIdDomainKey)
   def PrivateClintRange = cacheParams.PrivateClintRange
 
   def XLEN = 64
@@ -472,6 +475,10 @@ class CoupledL2(implicit p: Parameters) extends LazyModule with HasCoupledL2Para
       val cpu_wfi = Option.when(cacheParams.enableL2Flush)(Input(Bool()))
     })
 
+    // Choice selectors must be standalone ports: a bundle subfield lowers to a `firrtl.subfield`
+    // operation, which `firrtl.param_instance_choice` rejects as a selector.
+    val hartIdSelect = IO(Input(Property[hartIdDomain.Case]()))
+
     // Display info
     val sizeBytes = cacheParams.toCacheParams.capacity.toDouble
     val sizeStr = sizeBytesToStr(sizeBytes)
@@ -540,6 +547,7 @@ class CoupledL2(implicit p: Parameters) extends LazyModule with HasCoupledL2Para
           case (r, ready) => r.ready := ready
         }
         prefetcher.get.hartId := io.hartId
+        prefetcher.get.hartIdSelect := hartIdSelect
         prefetcher.get.pfCtrlFromCore := io.pfCtrlFromCore
         prefetcher.get.io.resp <> prefetchResps.get
         prefetcher.get.io.tlb_req <> io.l2_tlb_req
@@ -656,6 +664,7 @@ class CoupledL2(implicit p: Parameters) extends LazyModule with HasCoupledL2Para
           }))
         }
         slice.io.in <> in
+        slice.hartIdSelect := hartIdSelect
         if (enableHintGuidedGrant) {
           // If the hint of slice X is selected at cycle T, then at cycle (T + 3) & (T + 4)
           // we will try our best to select the grant of slice X.
@@ -1059,7 +1068,9 @@ class CoupledL2(implicit p: Parameters) extends LazyModule with HasCoupledL2Para
         pipelineNum = 1
       )))
       intf.get.toPipeline.head <> mbistPl.get.mbist
-      if (cacheParams.hartId == 0) mbistPl.get.registerCSV(intf.get.info, "MbistL2")
+      // Hart-independent: the L2 definition is shared between harts once the tile is cached, so
+      // the CSV registration must not be gated on a hart id any more.
+      mbistPl.get.registerCSV(intf.get.info, "MbistL2")
       intf.get.mbist := DontCare
       dontTouch(intf.get.mbist)
       //TODO: add mbist controller connections here

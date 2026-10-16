@@ -26,6 +26,7 @@ package xscache.coupledL2.prefetch
 
 import chisel3._
 import chisel3.util._
+import chisel3.properties.Property
 import org.chipsalliance.cde.config.Parameters
 import xscache.coupledL2.{HasCoupledL2Parameters, L2ToL1TlbIO}
 import utility._
@@ -1335,7 +1336,9 @@ class CDPPrefetcher(implicit p: Parameters) extends CDPModule {
     val pftReq = DecoupledIO(new PrefetchReq)
   })
 
-  println(s"====== CDP Prefetcher Config (hart ${cacheParams.hartId}) ======")
+  implicit val hartIdSelect = IO(Input(Property[hartIdDomain.Case]()))
+
+  println(s"====== CDP Prefetcher Config ======")
   println(s"useFilteredDetect:  $useFilteredDetect")
   println(s"useFilterTable:     $useFilterTable")
   println(s"degree:             $degree")
@@ -1348,7 +1351,7 @@ class CDPPrefetcher(implicit p: Parameters) extends CDPModule {
   println(s"============================================")
 
 
-  private val cstEnable = Constantin.createRecord("cdp_enable"+cacheParams.hartId.toString, initValue = 1)
+  private val cstEnable = Constantin.PerHart().createRecord("cdp_enable", initValue = 1)
   require(degree > 0, "CDP degree must be positive")
 
   /**

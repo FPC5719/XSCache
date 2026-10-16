@@ -30,6 +30,7 @@ package xscache.coupledL2.prefetch
 
 import chisel3._
 import chisel3.util._
+import chisel3.properties.Property
 import org.chipsalliance.cde.config.Parameters
 import utility.{ChiselDB, Constantin, MemReqSource, XSPerfAccumulate}
 import utility.sram.SRAMTemplate
@@ -175,21 +176,22 @@ class TemporalPrefetch(implicit p: Parameters) extends TPModule {
 
   /* Constantin Parameters */
 
-  val hartid = cacheParams.hartId
+  implicit val hartIdSelect = IO(Input(Property[hartIdDomain.Case]()))
+
   // 0 / 1: whether to enable temporal prefetcher
-  private val cstEnable = Constantin.createRecord("tp_enable"+hartid.toString, initValue = 1)
+  private val cstEnable = Constantin.PerHart().createRecord("tp_enable", initValue = 1)
   // 0 ~ N: throttle cycles for each prefetch request
-  private val tpThrottleCycles = Constantin.createRecord("tp_throttleCycles"+hartid.toString, initValue = 4)
+  private val tpThrottleCycles = Constantin.PerHart().createRecord("tp_throttleCycles", initValue = 4)
   // 0 / 1: whether request to set as trigger on meta hit
-  private val hitAsTrigger = Constantin.createRecord("tp_hitAsTrigger"+hartid.toString, initValue = 1)
+  private val hitAsTrigger = Constantin.PerHart().createRecord("tp_hitAsTrigger", initValue = 1)
   // 1 ~ triggerQueueDepth: enqueue threshold for triggerQueue
-  private val triggerThres = Constantin.createRecord("tp_triggerThres"+hartid.toString, initValue = 1)
+  private val triggerThres = Constantin.PerHart().createRecord("tp_triggerThres", initValue = 1)
   // 1 ~ tpEntryMaxLen: record threshold for recorder and sender (storage size will not be affected)
-  private val recordThres = Constantin.createRecord("tp_recordThres"+hartid.toString, initValue = tpEntryMaxLen)
+  private val recordThres = Constantin.PerHart().createRecord("tp_recordThres", initValue = tpEntryMaxLen)
   // 0 / 1: whether to train on vaddr
-  private val trainOnVaddr = Constantin.createRecord("tp_trainOnVaddr"+hartid.toString, initValue = 0)
+  private val trainOnVaddr = Constantin.PerHart().createRecord("tp_trainOnVaddr", initValue = 0)
   // 0 / 1: whether to eliminate L1 prefetch request training
-  private val trainOnL1PF = Constantin.createRecord("tp_trainOnL1PF"+hartid.toString, initValue = 0)
+  private val trainOnL1PF = Constantin.PerHart().createRecord("tp_trainOnL1PF", initValue = 0)
   val enable = io.enable && cstEnable.orR
 
   if (vaddrBitsOpt.isEmpty) {

@@ -2,6 +2,7 @@ package xscache.coupledL2.prefetch
 
 import chisel3._
 import chisel3.util._
+import chisel3.properties.Property
 import utility._
 import org.chipsalliance.cde.config.Parameters
 import utility.mbist.MbistPipeline
@@ -55,19 +56,20 @@ class PrefetchControllerIO(implicit p: Parameters) extends PrefetchBundle {
 class PrefetchController(implicit p: Parameters) extends PrefetchModule {
   val io = IO(new PrefetchControllerIO)
 
-  val hartId = p(L2ParamKey).hartId
+  implicit val hartIdSelect = IO(Input(Property[hartIdDomain.Case]()))
+
   private val Seq(none, ipop, fpop, fpopLate, fpopUseless, ipopNewctrl, ipopNewctrlHitfine) = Seq(0, 1, 2, 3, 4, 5, 6)
-  val controlMode = Constantin.createRecord(s"l2pf_controlMode$hartId", initValue = none)
+  val controlMode = Constantin.PerHart().createRecord("l2pf_controlMode", initValue = none)
 
   // control engine: ratio of last latency or other constant
   // 1<tlow<10: use default tlow
   // 10<tlow: absoluteValue, such as 0.5*300=150, 0.75*300=225, 1*300=300, 1.25*300=375, 1.5*300=450, 2*300=600
-  val tlow = Constantin.createRecord(s"l2pf_tlow$hartId", initValue = 1)
+  val tlow = Constantin.PerHart().createRecord("l2pf_tlow", initValue = 1)
   private def latencyDownThreshold(x: UInt): UInt = Mux(tlow < 10.U, x >> tlow, x >> 1)
 
   // pe calculation: >> weightLog
-  val peHoldWeightLog = Constantin.createRecord(s"l2pf_peHoldWeightLog$hartId", initValue = 3) // 1/8
-  val peL1PfCacheHitWeightLog = Constantin.createRecord(s"l2pf_peL1PfCacheHitWeightLog$hartId", initValue = 2) // 1/4
+  val peHoldWeightLog = Constantin.PerHart().createRecord("l2pf_peHoldWeightLog", initValue = 3) // 1/8
+  val peL1PfCacheHitWeightLog = Constantin.PerHart().createRecord("l2pf_peL1PfCacheHitWeightLog", initValue = 2) // 1/4
 
 
   // prefetch number

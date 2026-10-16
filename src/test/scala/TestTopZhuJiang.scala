@@ -1,6 +1,7 @@
 package zhujiang
 
 import chisel3._
+import chisel3.properties.Property
 import chisel3.stage.ChiselGeneratorAnnotation
 import chisel3.util._
 import _root_.circt.stage.{ChiselStage, FirtoolOption}
@@ -15,7 +16,7 @@ import xscache.common.{AliasField, BankBitsKey, PrefetchField}
 import xscache.coupledL2.{CoupledL2, EdgeInKey, EnableL2DecoupledDownstreamCHI, L1Param, L2ParamKey, L2ToL1Hint}
 import xscache.chi.{CHIDataCheckKey, CHIIssue, CHIPoisonKey, HasCHIMsgParameters, Issue}
 import zhujiang.device.AxiDeviceParams
-import utility.{ChiselDB, FileRegisters, LogUtilsOptions, LogUtilsOptionsKey, PerfCounterOptions, PerfCounterOptionsKey, XSLog, XSPerfLevel}
+import utility.{ChiselDB, FileRegisters, HartIdDomain, LogUtilsOptions, LogUtilsOptionsKey, PerfCounterOptions, PerfCounterOptionsKey, XSHartIdDomainKey, XSLog, XSPerfLevel}
 import xs.utils.debug.{HardwareAssertionKey, HwaParams}
 import xs.utils.perf.{DebugOptions, DebugOptionsKey}
 import xs.utils.perf.{LogUtilsOptions => ZJLogUtilsOptions, LogUtilsOptionsKey => ZJLogUtilsOptionsKey}
@@ -64,12 +65,14 @@ class TestTopZhuJiang(
     }
   }
 
+  val hartIdDomain = new HartIdDomain(numCores)
+
   val l2_nodes = (0 until numCores).map(i => LazyModule(new CoupledL2()(new Config((site, here, up) => {
     case EnableL2DecoupledDownstreamCHI => true
     case L2ParamKey => l2Params.copy(
-      name = s"L2_$i",
-      hartId = i
+      name = s"L2_$i"
     )
+    case XSHartIdDomainKey => hartIdDomain
     case CHIDataCheckKey => l2Params.dataCheck.getOrElse("none")
     case CHIPoisonKey => l2Params.enablePoison
     case CHIIssue => issue
@@ -172,6 +175,7 @@ class TestTopZhuJiang(
 
       l2.module.io.nodeID := ccNodes(i).nodeId.U
       l2.module.io.hartId := i.U
+      l2.module.hartIdSelect := Property(hartIdDomain.harts(i))
       l2.module.io.pfCtrlFromCore := 0.U.asTypeOf(l2.module.io.pfCtrlFromCore)
       l2.module.io.l2_tlb_req := DontCare
       l2.module.io.debugTopDown.robTrueCommit := 0.U
@@ -324,11 +328,15 @@ object TestTopZhuJiangConfig {
   def gen(config: Config)(top: Parameters => TestTopZhuJiang)(args: Array[String]): Unit = {
     ChiselDB.init(false)
 
-    val lazyTop = LazyModule(top(config))
-    (new ChiselStage).execute(
+    // The design - and with it the `HartIdDomain` ChoiceDomain, which registers in the Chisel
+    // Builder - must be built inside the generator lambda, not before elaboration.
+    (new xscache.XSCacheChiselStage).execute(
       args,
       Seq(
-        ChiselGeneratorAnnotation(() => lazyTop.module),
+        ChiselGeneratorAnnotation(() => {
+          val lazyTop = LazyModule(top(config))
+          lazyTop.module
+        }),
         FirtoolOption("--disable-annotation-unknown")
       )
     )

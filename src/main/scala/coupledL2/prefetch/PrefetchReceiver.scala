@@ -20,6 +20,7 @@ package xscache.coupledL2.prefetch
 import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
+import chisel3.properties.Property
 import freechips.rocketchip.tilelink._
 import xscache.coupledL2._
 import utility._
@@ -43,8 +44,10 @@ class PrefetchReceiver()(implicit p: Parameters) extends PrefetchModule {
     val req = DecoupledIO(new PrefetchReq)
    })
 
+  implicit val hartIdSelect = IO(Input(Property[hartIdDomain.Case]()))
+
   // 0 / 1: whether to enable
-  private val cstEnable = Constantin.createRecord("pfRcv_enable"+cacheParams.hartId.toString, initValue = 1)
+  private val cstEnable = Constantin.PerHart().createRecord("pfRcv_enable", initValue = 1)
   val enable = io.enable && cstEnable.orR
 
   io.req.valid := enable && io.recv_addr.valid

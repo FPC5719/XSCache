@@ -19,6 +19,7 @@ package xscache.coupledL2.prefetch
 
 import chisel3._
 import chisel3.util._
+import chisel3.properties.Property
 import utility._
 import org.chipsalliance.cde.config.Parameters
 import utility.mbist.MbistPipeline
@@ -229,6 +230,8 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
     val pfStat = if (hasCDP) Some(Input(new PrefetchStat)) else None
   })
   val hartId = IO(Input(UInt(hartIdLen.W)))
+  // Standalone choice selector for the per-hart Constantin records / DB tables below.
+  val hartIdSelect = IO(Input(Property[hartIdDomain.Case]()))
   val pfCtrlFromCore = IO(Input(new PrefetchCtrlFromCore))
   val l2ToL1PfCtrl = IO(Output(new L2ToL1PfCtrl))
   val pfFeedbackVec = IO(Input(Vec(banks, new PrefetchFeedbackBundle())))
@@ -367,6 +370,13 @@ class Prefetcher(implicit p: Parameters) extends PrefetchModule {
   prefetchController.io.isDemandTrain := train.valid && (
     MemReqSource.isCPUReq(train.bits.reqsource) || MemReqSource.isL1Prefetch(train.bits.reqsource)
   )
+
+  prefetchController.hartIdSelect := hartIdSelect
+  pbop.foreach(_.hartIdSelect := hartIdSelect)
+  vbop.foreach(_.hartIdSelect := hartIdSelect)
+  tp.foreach(_.hartIdSelect := hartIdSelect)
+  cdp.foreach(_.hartIdSelect := hartIdSelect)
+  pfRcv.foreach(_.hartIdSelect := hartIdSelect)
   // =================== Connection for each Prefetcher =====================
   // Rcv > NL > VBOP > PBOP > TP > CDP
   train.ready := true.B
