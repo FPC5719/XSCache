@@ -1016,6 +1016,7 @@ class CoupledL2(implicit p: Parameters) extends LazyModule with HasCoupledL2Para
     }
     topDown match {
       case Some(t) =>
+        t.hartIdSelect := hartIdSelect
         for ((s, i) <- slices.zipWithIndex) {
           t.io.msStatus(i) := s.io.msStatus.get
           t.io.msAlloc(i) := s.io.msAlloc.get

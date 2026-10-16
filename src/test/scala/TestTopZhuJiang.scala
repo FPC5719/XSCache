@@ -86,8 +86,7 @@ class TestTopZhuJiang(
     case PerfCounterOptionsKey => PerfCounterOptions(
       here(L2ParamKey).enablePerf && !here(L2ParamKey).FPGAPlatform,
       here(L2ParamKey).enableRollingDB && !here(L2ParamKey).FPGAPlatform,
-      XSPerfLevel.withName("VERBOSE"),
-      i
+      XSPerfLevel.withName("VERBOSE")
     )
   }))))
 
@@ -291,8 +290,7 @@ object TestTopZhuJiangConfig {
     case PerfCounterOptionsKey => PerfCounterOptions(
       site(L2ParamKey).enablePerf && !site(L2ParamKey).FPGAPlatform,
       site(L2ParamKey).enableRollingDB && !site(L2ParamKey).FPGAPlatform,
-      XSPerfLevel.withName("VERBOSE"),
-      0
+      XSPerfLevel.withName("VERBOSE")
     )
     case HardwareAssertionKey => HwaParams(enable = false)
     case ZJLogUtilsOptionsKey => ZJLogUtilsOptions(

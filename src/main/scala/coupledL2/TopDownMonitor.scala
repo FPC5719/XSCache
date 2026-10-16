@@ -19,6 +19,7 @@ package xscache.coupledL2
 import org.chipsalliance.cde.config.Parameters
 import chisel3._
 import chisel3.util._
+import chisel3.properties.Property
 import xscache.coupledL2.prefetch.PfSource
 import xscache.coupledL2.utils._
 import utility._
@@ -42,6 +43,8 @@ class PfStatInMSHRBundle()(implicit p: Parameters) extends L2Bundle {
 // TODO: Accommodate CHI
 class TopDownMonitor()(implicit p: Parameters) extends L2Module {
   val banks = 1 << bankBits
+  // Standalone port: choice selectors cannot be bundle subfields (see CoupledL2).
+  implicit val hartIdSelect = IO(Input(Property[hartIdDomain.Case]()))
   val io = IO(new Bundle() {
     val dirResult = Vec(banks, Flipped(ValidIO(new DirResult)))
     val msStatus = Vec(banks, Vec(mshrsAll, Flipped(ValidIO(new MSHRStatus))))
